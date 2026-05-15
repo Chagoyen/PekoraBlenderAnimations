@@ -1,0 +1,407 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans);color:var(--color-text-primary)}
+.wrap{padding:2rem 0;max-width:680px}
+.header{margin-bottom:2rem}
+.title{font-size:22px;font-weight:500;margin-bottom:4px}
+.sub{font-size:14px;color:var(--color-text-secondary);line-height:1.6}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:1.25rem;margin-bottom:1rem}
+.card-label{font-size:12px;font-weight:500;color:var(--color-text-secondary);text-transform:uppercase;letter-spacing:.06em;margin-bottom:.75rem}
+.drop-zone{border:1.5px dashed var(--color-border-secondary);border-radius:var(--border-radius-md);padding:2.5rem 1rem;text-align:center;cursor:pointer;transition:background .15s}
+.drop-zone:hover,.drop-zone.drag{background:var(--color-background-secondary)}
+.drop-zone i{font-size:32px;color:var(--color-text-secondary);display:block;margin-bottom:.5rem}
+.drop-zone p{font-size:14px;color:var(--color-text-secondary)}
+.drop-zone .hint{font-size:12px;color:var(--color-text-tertiary);margin-top:4px}
+#file-input{display:none}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.field label{font-size:13px;color:var(--color-text-secondary);display:block;margin-bottom:4px}
+.field input,.field select{width:100%;font-size:14px}
+.bone-list{max-height:200px;overflow-y:auto;border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-md);margin-top:.5rem}
+.bone-row{display:flex;align-items:center;gap:8px;padding:6px 10px;font-size:13px;border-bottom:0.5px solid var(--color-border-tertiary)}
+.bone-row:last-child{border-bottom:none}
+.bone-row input[type=text]{flex:1;font-size:13px}
+.bone-row .arrow{color:var(--color-text-tertiary);font-size:18px}
+.status{font-size:13px;padding:.5rem .75rem;border-radius:var(--border-radius-md);margin-top:.75rem}
+.status.ok{background:var(--color-background-success);color:var(--color-text-success)}
+.status.err{background:var(--color-background-danger);color:var(--color-text-danger)}
+.status.info{background:var(--color-background-info);color:var(--color-text-info)}
+.btn-row{display:flex;gap:8px;margin-top:1rem}
+.btn-primary{background:var(--color-text-primary);color:var(--color-background-primary);border:none;padding:8px 20px;border-radius:var(--border-radius-md);font-size:14px;font-weight:500;cursor:pointer}
+.btn-primary:disabled{opacity:.4;cursor:not-allowed}
+.btn-secondary{background:transparent;color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);padding:8px 16px;border-radius:var(--border-radius-md);font-size:14px;cursor:pointer}
+.stats-row{display:flex;gap:12px;margin-top:.75rem}
+.stat{background:var(--color-background-secondary);border-radius:var(--border-radius-md);padding:.75rem 1rem;flex:1;text-align:center}
+.stat .n{font-size:20px;font-weight:500}
+.stat .l{font-size:12px;color:var(--color-text-secondary);margin-top:2px}
+.progress-bar{height:4px;background:var(--color-border-tertiary);border-radius:2px;margin-top:.75rem;overflow:hidden}
+.progress-fill{height:100%;background:var(--color-text-primary);border-radius:2px;width:0;transition:width .2s}
+.tag{display:inline-block;font-size:11px;padding:2px 8px;border-radius:99px;margin-left:6px;vertical-align:middle}
+.tag.bvh{background:#E6F1FB;color:#0C447C}
+.tag.done{background:#EAF3DE;color:#3B6D11}
+</style>
+
+<div class="wrap">
+  <h2 class="sr-only">Blender to Pekora/Korone RBXM animation exporter</h2>
+  <div class="header">
+    <div class="title">Blender → Pekora Exporter</div>
+    <div class="sub">Upload a Blender BVH animation export and download a ready-to-import <code>.rbxmx</code> KeyframeSequence file.</div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Step 1 — Upload BVH file</div>
+    <div class="drop-zone" id="dz" onclick="document.getElementById('file-input').click()">
+      <i class="ti ti-upload" aria-hidden="true"></i>
+      <p>Drop your <strong>.bvh</strong> file here or click to browse</p>
+      <div class="hint">Export from Blender: File → Export → Motion Capture (.bvh)</div>
+    </div>
+    <input type="file" id="file-input" accept=".bvh">
+    <div id="file-status"></div>
+    <div class="stats-row" id="stats-row" style="display:none">
+      <div class="stat"><div class="n" id="stat-bones">—</div><div class="l">bones</div></div>
+      <div class="stat"><div class="n" id="stat-frames">—</div><div class="l">frames</div></div>
+      <div class="stat"><div class="n" id="stat-fps">—</div><div class="l">fps</div></div>
+      <div class="stat"><div class="n" id="stat-dur">—</div><div class="l">duration</div></div>
+    </div>
+  </div>
+
+  <div class="card" id="bone-card" style="display:none">
+    <div class="card-label">Step 2 — Map bones to Roblox part names</div>
+    <div style="font-size:13px;color:var(--color-text-secondary);margin-bottom:.75rem">Match each BVH bone to its Roblox R15 part name. Common names are auto-filled.</div>
+    <div class="bone-list" id="bone-list"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-label">Step 3 — Animation settings</div>
+    <div class="row">
+      <div class="field">
+        <label>Animation name</label>
+        <input type="text" id="anim-name" value="BlenderAnimation" placeholder="MyAnimation">
+      </div>
+      <div class="field">
+        <label>Priority</label>
+        <select id="anim-priority">
+          <option value="0">Core</option>
+          <option value="1">Idle</option>
+          <option value="2" selected>Movement</option>
+          <option value="3">Action</option>
+          <option value="4">Action2</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Loop</label>
+        <select id="anim-loop">
+          <option value="true">Yes</option>
+          <option value="false" selected>No</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Scale factor</label>
+        <input type="number" id="scale" value="0.01" step="0.001" min="0.001">
+      </div>
+    </div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-primary" id="convert-btn" disabled onclick="convertAndDownload()">
+      <i class="ti ti-file-download" aria-hidden="true"></i> Generate .rbxmx
+    </button>
+    <button class="btn-secondary" id="reset-btn" onclick="resetAll()">Reset</button>
+  </div>
+  <div class="progress-bar" id="prog-wrap" style="display:none"><div class="progress-fill" id="prog"></div></div>
+  <div id="convert-status"></div>
+</div>
+
+<script>
+let bvhData = null;
+let parsedBVH = null;
+
+const ROBLOX_R15_MAP = {
+  'hips':'HumanoidRootPart','spine':'LowerTorso','spine1':'UpperTorso','spine2':'UpperTorso',
+  'neck':'Head','head':'Head',
+  'leftshoulder':'LeftUpperArm','leftarm':'LeftUpperArm','leftforearm':'LeftLowerArm','lefthand':'LeftHand',
+  'rightshoulder':'RightUpperArm','rightarm':'RightUpperArm','rightforearm':'RightLowerArm','righthand':'RightHand',
+  'leftupleg':'LeftUpperLeg','leftleg':'LeftLowerLeg','leftfoot':'LeftFoot',
+  'rightupleg':'RightUpperLeg','rightleg':'RightLowerLeg','rightfoot':'RightFoot',
+  'mixamorig:hips':'HumanoidRootPart','mixamorig:spine':'LowerTorso',
+  'mixamorig:spine1':'UpperTorso','mixamorig:spine2':'UpperTorso','mixamorig:neck':'Head','mixamorig:head':'Head',
+  'mixamorig:leftshoulder':'LeftUpperArm','mixamorig:leftarm':'LeftUpperArm',
+  'mixamorig:leftforearm':'LeftLowerArm','mixamorig:lefthand':'LeftHand',
+  'mixamorig:rightshoulder':'RightUpperArm','mixamorig:rightarm':'RightUpperArm',
+  'mixamorig:rightforearm':'RightLowerArm','mixamorig:righthand':'RightHand',
+  'mixamorig:leftupleg':'LeftUpperLeg','mixamorig:leftleg':'LeftLowerLeg','mixamorig:leftfoot':'LeftFoot',
+  'mixamorig:rightupleg':'RightUpperLeg','mixamorig:rightleg':'RightLowerLeg','mixamorig:rightfoot':'RightFoot'
+};
+
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); handleFile(e.dataTransfer.files[0]); });
+document.getElementById('file-input').addEventListener('change', e => handleFile(e.target.files[0]));
+
+function handleFile(file) {
+  if (!file || !file.name.endsWith('.bvh')) {
+    showStatus('file-status', 'Please upload a .bvh file.', 'err'); return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    bvhData = e.target.result;
+    try {
+      parsedBVH = parseBVH(bvhData);
+      showStatus('file-status', `Loaded: ${file.name}`, 'ok');
+      document.getElementById('stats-row').style.display = 'flex';
+      document.getElementById('stat-bones').textContent = parsedBVH.joints.length;
+      document.getElementById('stat-frames').textContent = parsedBVH.numFrames;
+      document.getElementById('stat-fps').textContent = Math.round(1 / parsedBVH.frameTime);
+      document.getElementById('stat-dur').textContent = (parsedBVH.numFrames * parsedBVH.frameTime).toFixed(2) + 's';
+      renderBoneMapper(parsedBVH.joints);
+      document.getElementById('bone-card').style.display = 'block';
+      document.getElementById('convert-btn').disabled = false;
+      document.getElementById('anim-name').value = file.name.replace('.bvh','');
+    } catch(err) {
+      showStatus('file-status', 'Failed to parse BVH: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function parseBVH(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  let i = 0;
+  const joints = [];
+  const stack = [];
+  let current = null;
+  let numFrames = 0;
+  let frameTime = 1/30;
+  let motionStart = 0;
+
+  while (i < lines.length) {
+    const line = lines[i];
+    if (line.startsWith('ROOT') || line.startsWith('JOINT')) {
+      const name = line.split(/\s+/)[1];
+      const joint = { name, channels: [], parent: current ? current.name : null, offset: [0,0,0] };
+      joints.push(joint);
+      stack.push(joint);
+      current = joint;
+    } else if (line.startsWith('End Site')) {
+      stack.push(null);
+    } else if (line === '}') {
+      stack.pop();
+      current = stack.length > 0 ? stack[stack.length-1] : null;
+    } else if (line.startsWith('OFFSET')) {
+      const parts = line.split(/\s+/);
+      if (current) current.offset = [parseFloat(parts[1]), parseFloat(parts[2]), parseFloat(parts[3])];
+    } else if (line.startsWith('CHANNELS')) {
+      const parts = line.split(/\s+/);
+      const count = parseInt(parts[1]);
+      if (current) current.channels = parts.slice(2, 2 + count);
+    } else if (line === 'MOTION') {
+      i++;
+      numFrames = parseInt(lines[i].split(/\s+/)[1]);
+      i++;
+      frameTime = parseFloat(lines[i].split(/\s+/)[2]);
+      motionStart = i + 1;
+      break;
+    }
+    i++;
+  }
+
+  const frameData = [];
+  for (let f = motionStart; f < motionStart + numFrames && f < lines.length; f++) {
+    const vals = lines[f].split(/\s+/).map(parseFloat);
+    frameData.push(vals);
+  }
+
+  return { joints, numFrames, frameTime, frameData };
+}
+
+function renderBoneMapper(joints) {
+  const list = document.getElementById('bone-list');
+  list.innerHTML = '';
+  joints.forEach(j => {
+    const mapped = ROBLOX_R15_MAP[j.name.toLowerCase()] || '';
+    const row = document.createElement('div');
+    row.className = 'bone-row';
+    row.innerHTML = `<span style="flex:1;color:var(--color-text-secondary);font-family:var(--font-mono);font-size:12px">${j.name}</span>
+      <i class="ti ti-arrow-right arrow" aria-hidden="true"></i>
+      <input type="text" id="bone-${j.name}" value="${mapped}" placeholder="skip (leave blank)">`;
+    list.appendChild(row);
+  });
+}
+
+function getBoneMap() {
+  const map = {};
+  if (!parsedBVH) return map;
+  parsedBVH.joints.forEach(j => {
+    const el = document.getElementById('bone-' + j.name);
+    if (el && el.value.trim()) map[j.name] = el.value.trim();
+  });
+  return map;
+}
+
+function deg2rad(d) { return d * Math.PI / 180; }
+
+function eulerToMatrix(rx, ry, rz, order) {
+  const cx = Math.cos(rx), sx = Math.sin(rx);
+  const cy = Math.cos(ry), sy = Math.sin(ry);
+  const cz = Math.cos(rz), sz = Math.sin(rz);
+  let m = [[1,0,0],[0,1,0],[0,0,1]];
+  const Rx = [[1,0,0],[0,cx,-sx],[0,sx,cx]];
+  const Ry = [[cy,0,sy],[0,1,0],[-sy,0,cy]];
+  const Rz = [[cz,-sz,0],[sz,cz,0],[0,0,1]];
+  const mul = (a,b) => {
+    return [[a[0][0]*b[0][0]+a[0][1]*b[1][0]+a[0][2]*b[2][0], a[0][0]*b[0][1]+a[0][1]*b[1][1]+a[0][2]*b[2][1], a[0][0]*b[0][2]+a[0][1]*b[1][2]+a[0][2]*b[2][2]],
+            [a[1][0]*b[0][0]+a[1][1]*b[1][0]+a[1][2]*b[2][0], a[1][0]*b[0][1]+a[1][1]*b[1][1]+a[1][2]*b[2][1], a[1][0]*b[0][2]+a[1][1]*b[1][2]+a[1][2]*b[2][2]],
+            [a[2][0]*b[0][0]+a[2][1]*b[1][0]+a[2][2]*b[2][0], a[2][0]*b[0][1]+a[2][1]*b[1][1]+a[2][2]*b[2][1], a[2][0]*b[0][2]+a[2][1]*b[1][2]+a[2][2]*b[2][2]]];
+  };
+  const mats = { Xrotation: Rx, Yrotation: Ry, Zrotation: Rz };
+  for (const ch of (order||['Zrotation','Xrotation','Yrotation'])) {
+    if (mats[ch]) m = mul(m, mats[ch]);
+  }
+  return m;
+}
+
+function matToCFrame(x, y, z, m) {
+  return { x, y, z, r00:m[0][0], r01:m[0][1], r02:m[0][2], r10:m[1][0], r11:m[1][1], r12:m[1][2], r20:m[2][0], r21:m[2][1], r22:m[2][2] };
+}
+
+function cfXML(cf, name) {
+  return `<CoordinateFrame name="${name}"><X>${cf.x.toFixed(6)}</X><Y>${cf.y.toFixed(6)}</Y><Z>${cf.z.toFixed(6)}</Z><R00>${cf.r00.toFixed(6)}</R00><R01>${cf.r01.toFixed(6)}</R01><R02>${cf.r02.toFixed(6)}</R02><R10>${cf.r10.toFixed(6)}</R10><R11>${cf.r11.toFixed(6)}</R11><R12>${cf.r12.toFixed(6)}</R12><R20>${cf.r20.toFixed(6)}</R20><R21>${cf.r21.toFixed(6)}</R21><R22>${cf.r22.toFixed(6)}</R22></CoordinateFrame>`;
+}
+
+function buildPoseXML(boneName, cf, children, easingStyle, easingDir, weight) {
+  return `<Item class="Pose"><Properties><string name="Name">${boneName}</string>${cfXML(cf,'CFrame')}<token name="EasingStyle">${easingStyle}</token><token name="EasingDirection">${easingDir}</token><float name="Weight">${weight}</float><bool name="MaskWeight">false</bool></Properties>${children}</Item>`;
+}
+
+function generateRBXMX(bvh, boneMap, animName, priority, loop, scale) {
+  const { joints, numFrames, frameTime, frameData } = bvh;
+  const totalDuration = numFrames * frameTime;
+
+  let channelIndex = [];
+  let idx = 0;
+  for (const j of joints) {
+    channelIndex.push({ joint: j, startIdx: idx });
+    idx += j.channels.length;
+  }
+
+  const keyframes = [];
+  const step = Math.max(1, Math.floor(numFrames / Math.min(numFrames, 200)));
+  for (let f = 0; f < numFrames; f += step) {
+    const row = frameData[f] || [];
+    const time = f * frameTime;
+    const poses = {};
+    for (const ci of channelIndex) {
+      const j = ci.joint;
+      const mapped = boneMap[j.name];
+      if (!mapped) continue;
+      let px=0,py=0,pz=0,rx=0,ry=0,rz=0;
+      const rotOrder = j.channels.filter(c => c.endsWith('rotation'));
+      for (let c = 0; c < j.channels.length; c++) {
+        const ch = j.channels[c];
+        const v = row[ci.startIdx + c] || 0;
+        if (ch==='Xposition') px=v*scale;
+        else if (ch==='Yposition') py=v*scale;
+        else if (ch==='Zposition') pz=v*scale;
+        else if (ch==='Xrotation') rx=deg2rad(v);
+        else if (ch==='Yrotation') ry=deg2rad(v);
+        else if (ch==='Zrotation') rz=deg2rad(v);
+      }
+      const mat = eulerToMatrix(rx, ry, rz, rotOrder);
+      const cf = matToCFrame(px, py, pz, mat);
+      if (!poses[mapped]) poses[mapped] = cf;
+    }
+
+    const rootPoseName = boneMap[joints[0]?.name] || 'HumanoidRootPart';
+    let poseXML = '';
+    const usedBones = Object.keys(poses);
+    for (const bn of usedBones) {
+      if (bn === rootPoseName) continue;
+      poseXML += buildPoseXML(bn, poses[bn], '', 3, 0, 1);
+    }
+    const rootCF = poses[rootPoseName] || matToCFrame(0,0,0,[[1,0,0],[0,1,0],[0,0,1]]);
+    const rootPose = buildPoseXML(rootPoseName, rootCF, poseXML, 3, 0, 1);
+
+    keyframes.push(`<Item class="Keyframe"><Properties><string name="Name">${time.toFixed(4)}</string><float name="Time">${time.toFixed(6)}</float></Properties>${rootPose}</Item>`);
+  }
+
+  if (numFrames > 1) {
+    const lastRow = frameData[numFrames-1] || [];
+    const poses = {};
+    for (const ci of channelIndex) {
+      const j = ci.joint;
+      const mapped = boneMap[j.name];
+      if (!mapped) continue;
+      let px=0,py=0,pz=0,rx=0,ry=0,rz=0;
+      const rotOrder = j.channels.filter(c=>c.endsWith('rotation'));
+      for (let c=0;c<j.channels.length;c++) {
+        const ch=j.channels[c]; const v=lastRow[ci.startIdx+c]||0;
+        if(ch==='Xposition')px=v*scale;else if(ch==='Yposition')py=v*scale;else if(ch==='Zposition')pz=v*scale;
+        else if(ch==='Xrotation')rx=deg2rad(v);else if(ch==='Yrotation')ry=deg2rad(v);else if(ch==='Zrotation')rz=deg2rad(v);
+      }
+      const mat=eulerToMatrix(rx,ry,rz,j.channels.filter(c=>c.endsWith('rotation')));
+      const cf=matToCFrame(px,py,pz,mat);
+      if(!poses[boneMap[j.name]])poses[boneMap[j.name]]=cf;
+    }
+    const rootPoseName=boneMap[joints[0]?.name]||'HumanoidRootPart';
+    let pXML='';
+    for(const bn of Object.keys(poses)){if(bn===rootPoseName)continue;pXML+=buildPoseXML(bn,poses[bn],'',3,0,1);}
+    const rootCF=poses[rootPoseName]||matToCFrame(0,0,0,[[1,0,0],[0,1,0],[0,0,1]]);
+    keyframes.push(`<Item class="Keyframe"><Properties><string name="Name">${totalDuration.toFixed(4)}</string><float name="Time">${totalDuration.toFixed(6)}</float></Properties>${buildPoseXML(rootPoseName,rootCF,pXML,3,0,1)}</Item>`);
+  }
+
+  return `<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4"><Item class="KeyframeSequence"><Properties><string name="Name">${animName}</string><bool name="Loop">${loop}</bool><token name="Priority">${priority}</token><float name="HipHeight">1.35</float></Properties>${keyframes.join('')}</Item></roblox>`;
+}
+
+function convertAndDownload() {
+  if (!parsedBVH) return;
+  const boneMap = getBoneMap();
+  const validMapped = Object.values(boneMap).filter(v=>v).length;
+  if (validMapped === 0) { showStatus('convert-status','No bones mapped — map at least one bone to a Roblox part name.','err'); return; }
+
+  document.getElementById('prog-wrap').style.display='block';
+  document.getElementById('prog').style.width='30%';
+  showStatus('convert-status','Generating KeyframeSequence...','info');
+
+  setTimeout(() => {
+    try {
+      const name = document.getElementById('anim-name').value || 'BlenderAnimation';
+      const priority = parseInt(document.getElementById('anim-priority').value);
+      const loop = document.getElementById('anim-loop').value;
+      const scale = parseFloat(document.getElementById('scale').value);
+
+      document.getElementById('prog').style.width='60%';
+      const xml = generateRBXMX(parsedBVH, boneMap, name, priority, loop, scale);
+      document.getElementById('prog').style.width='90%';
+
+      const blob = new Blob([xml], { type: 'application/xml' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = name + '.rbxmx'; a.click();
+      URL.revokeObjectURL(url);
+
+      document.getElementById('prog').style.width='100%';
+      showStatus('convert-status',`Done! Downloaded ${name}.rbxmx — drag it into Pekora/Korone to import.`,'ok');
+    } catch(err) {
+      showStatus('convert-status','Error: ' + err.message,'err');
+      document.getElementById('prog-wrap').style.display='none';
+    }
+  }, 80);
+}
+
+function resetAll() {
+  bvhData=null; parsedBVH=null;
+  document.getElementById('file-status').innerHTML='';
+  document.getElementById('convert-status').innerHTML='';
+  document.getElementById('stats-row').style.display='none';
+  document.getElementById('bone-card').style.display='none';
+  document.getElementById('convert-btn').disabled=true;
+  document.getElementById('prog-wrap').style.display='none';
+  document.getElementById('prog').style.width='0';
+  document.getElementById('file-input').value='';
+}
+
+function showStatus(id, msg, type) {
+  const el = document.getElementById(id);
+  el.innerHTML = `<div class="status ${type}">${msg}</div>`;
+}
+</script>
